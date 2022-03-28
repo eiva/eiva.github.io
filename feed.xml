@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.1">Jekyll</generator><link href="https://eiva.dev/feed.xml" rel="self" type="application/atom+xml" /><link href="https://eiva.dev/" rel="alternate" type="text/html" /><updated>2022-03-28T02:41:21+00:00</updated><id>https://eiva.dev/feed.xml</id><title type="html">Personal blog</title><subtitle>This domain is not for sale.</subtitle><entry><title type="html">Extra type safety</title><link href="https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety.html" rel="alternate" type="text/html" title="Extra type safety" /><published>2022-03-27T20:44:00+00:00</published><updated>2022-03-27T20:44:00+00:00</updated><id>https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety</id><content type="html" xml:base="https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety.html"><![CDATA[<p>One thing which I found pretty useful in terms of type safety is to create special wrappers for primitive types.</p>
+
+<p>Idea is following: assume that in code we have 2 entities: User and Group. Both can be represented as simple strings:</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">data class</span> <span class="nc">SomeAggregation</span><span class="p">(</span>
+    <span class="kd">val</span> <span class="py">user</span><span class="p">:</span> <span class="nc">String</span><span class="p">,</span>
+    <span class="kd">val</span> <span class="py">group</span><span class="p">:</span> <span class="nc">String</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>Simple solution. But problem can happen when we accidentally misuse that values.</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">fun</span> <span class="nf">validateGroupInDenylist</span><span class="p">(</span><span class="n">group</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span> <span class="o">..</span><span class="p">.</span>
+
+<span class="o">..</span><span class="p">.</span>
+
+<span class="nf">validateGroupInDenylist</span><span class="p">(</span><span class="n">aggregation</span><span class="p">.</span><span class="n">user</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>In most such cases Unit Testing can help find such mistakes. But there still some chance that this bug will sneak into production code.</p>
+
+<p>Alternative could be to create simple dedicated type.</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">data class</span> <span class="nc">User</span><span class="p">(</span><span class="kd">val</span> <span class="py">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span>
+<span class="kd">data class</span> <span class="nc">Group</span><span class="p">(</span><span class="kd">val</span> <span class="py">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span>
+
+<span class="kd">data class</span> <span class="nc">SomeAggregation</span><span class="p">(</span>
+    <span class="kd">val</span> <span class="py">user</span><span class="p">:</span> <span class="nc">User</span><span class="p">,</span>
+    <span class="kd">val</span> <span class="py">group</span><span class="p">:</span> <span class="nc">Group</span>
+<span class="p">)</span>
+
+<span class="k">fun</span> <span class="nf">validateGroupInDenylist</span><span class="p">(</span><span class="n">group</span><span class="p">:</span> <span class="nc">Group</span><span class="p">)</span> <span class="o">..</span><span class="p">.</span>
+</code></pre></div></div>
+
+<p>Now if we try to misuse argument <code class="language-plaintext highlighter-rouge">validateGroupInDenylist(aggregation.user)</code> compiler instantly notify us about this.</p>
+
+<p>Simple technics, but it actually saved me from hours of debugging.</p>
+
+<h2 id="json-serialization">Json Serialization</h2>
+
+<p>One caveat here could be JSON serialization.</p>
+
+<p>By default json representation of <code class="language-plaintext highlighter-rouge">SomeAggregation</code> will look a bit strange:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"user"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"userValue"</span><span class="p">}</span><span class="w">
+    </span><span class="nl">"group"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"groupValue"</span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>While it is possible to create individual serializer for each type - it instantly become cumbersome.
+Different solution could be in defining only base type.</p>
+
+<h3 id="base-type-for-wrapper">Base type for wrapper</h3>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="k">import</span> <span class="nn">com.fasterxml.jackson.annotation.JsonIgnore</span>
+<span class="k">import</span> <span class="nn">java.io.Serializable</span>
+
+<span class="k">abstract</span> <span class="kd">class</span> <span class="nc">StringWrapper</span><span class="p">(</span><span class="kd">val</span> <span class="py">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span> <span class="p">:</span> <span class="nc">Serializable</span> <span class="p">{</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">toString</span><span class="p">()</span> <span class="p">=</span> <span class="n">value</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">equals</span><span class="p">(</span><span class="n">other</span><span class="p">:</span> <span class="nc">Any</span><span class="p">?):</span> <span class="nc">Boolean</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">other</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">false</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="o">::</span><span class="k">class</span> <span class="p">!=</span> <span class="n">other</span><span class="o">::</span><span class="k">class</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">false</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="n">value</span> <span class="p">==</span> <span class="p">(</span><span class="n">other</span> <span class="k">as</span> <span class="nc">StringWrapper</span><span class="p">).</span><span class="n">value</span>
+    <span class="p">}</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">hashCode</span><span class="p">():</span> <span class="nc">Int</span> <span class="p">=</span> <span class="n">value</span><span class="p">.</span><span class="nf">hashCode</span><span class="p">()</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Later we can use it as usual:</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">class</span> <span class="nc">User</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span> <span class="p">:</span> <span class="nc">StringWrapper</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="object-mapper">Object mapper</h2>
+
+<p>In this case we need to teach serializer to work with that wrapper only once:</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="cm">/**
+ * Allow jackson to properly select deserializer for StringWrapper subclass
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperModuleDeserializers</span> <span class="p">:</span> <span class="nc">SimpleDeserializers</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">findBeanDeserializer</span><span class="p">(</span>
+        <span class="n">type</span><span class="p">:</span> <span class="nc">JavaType</span><span class="p">,</span>
+        <span class="n">config</span><span class="p">:</span> <span class="nc">DeserializationConfig</span><span class="p">,</span>
+        <span class="n">beanDesc</span><span class="p">:</span> <span class="nc">BeanDescription</span>
+    <span class="p">):</span> <span class="nc">JsonDeserializer</span><span class="p">&lt;</span><span class="err">*</span><span class="p">&gt;?</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">type</span><span class="p">.</span><span class="nf">isTypeOrSubTypeOf</span><span class="p">(</span><span class="nc">StringWrapper</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">))</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nc">StringWrapperDeserializer</span><span class="p">(</span><span class="n">type</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="k">super</span><span class="p">.</span><span class="nf">findBeanDeserializer</span><span class="p">(</span><span class="n">type</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">beanDesc</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**
+ * Deserialize subclass of StringWrapper from a simple string value.
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperDeserializer</span><span class="p">(</span><span class="k">private</span> <span class="kd">val</span> <span class="py">type</span><span class="p">:</span> <span class="nc">JavaType</span><span class="p">)</span> <span class="p">:</span> <span class="nc">JsonDeserializer</span><span class="p">&lt;</span><span class="nc">StringWrapper</span><span class="p">&gt;()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">deserialize</span><span class="p">(</span><span class="n">parser</span><span class="p">:</span> <span class="nc">JsonParser</span><span class="p">,</span> <span class="n">p1</span><span class="p">:</span> <span class="nc">DeserializationContext</span><span class="p">?):</span> <span class="nc">StringWrapper</span><span class="p">?</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">type</span><span class="p">.</span><span class="n">rawClass</span><span class="p">.</span><span class="nf">getConstructor</span><span class="p">(</span><span class="nc">String</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">).</span><span class="nf">newInstance</span><span class="p">(</span><span class="n">parser</span><span class="p">.</span><span class="n">valueAsString</span><span class="p">.</span><span class="nf">intern</span><span class="p">())</span> <span class="k">as</span> <span class="nc">StringWrapper</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**
+ * Serializes StringWrapper as a simple string.
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperSerializer</span> <span class="p">:</span> <span class="nc">JsonSerializer</span><span class="p">&lt;</span><span class="nc">StringWrapper</span><span class="p">&gt;()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">serialize</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nc">StringWrapper</span><span class="p">?,</span> <span class="n">jgen</span><span class="p">:</span> <span class="nc">JsonGenerator</span><span class="p">,</span> <span class="n">p2</span><span class="p">:</span> <span class="nc">SerializerProvider</span><span class="p">?)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeString</span><span class="p">(</span><span class="s">""</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeString</span><span class="p">(</span><span class="n">value</span><span class="p">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**
+ * Serializes StringWrapper as a string map key.
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperKeySerializer</span> <span class="p">:</span> <span class="nc">JsonSerializer</span><span class="p">&lt;</span><span class="nc">StringWrapper</span><span class="p">&gt;()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">serialize</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nc">StringWrapper</span><span class="p">?,</span> <span class="n">jgen</span><span class="p">:</span> <span class="nc">JsonGenerator</span><span class="p">,</span> <span class="n">p2</span><span class="p">:</span> <span class="nc">SerializerProvider</span><span class="p">?)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeFieldName</span><span class="p">(</span><span class="s">""</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeFieldName</span><span class="p">(</span><span class="n">value</span><span class="p">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">fun</span> <span class="nf">register</span><span class="p">():</span> <span class="nc">ObjectMapper</span> <span class="p">{</span>
+    <span class="kd">val</span> <span class="py">simpleModule</span> <span class="p">=</span> <span class="nc">SimpleModule</span><span class="p">()</span>
+    <span class="n">simpleModule</span><span class="p">.</span><span class="nf">setDeserializers</span><span class="p">(</span><span class="nc">StringWrapperModuleDeserializers</span><span class="p">())</span>
+    <span class="n">simpleModule</span><span class="p">.</span><span class="nf">addKeySerializer</span><span class="p">(</span><span class="nc">StringWrapper</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">,</span> <span class="nc">StringWrapperKeySerializer</span><span class="p">())</span>
+    <span class="n">simpleModule</span><span class="p">.</span><span class="nf">addSerializer</span><span class="p">(</span><span class="nc">StringWrapper</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">,</span> <span class="nc">StringWrapperSerializer</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="nf">jacksonObjectMapper</span><span class="p">()</span>
+        <span class="p">.</span><span class="nf">registerModule</span><span class="p">(</span><span class="n">simpleModule</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now it is possible to use wrapped types as any other primitive type</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">data class</span> <span class="nc">Data</span><span class="p">(</span>
+    <span class="kd">val</span> <span class="py">users</span><span class="p">:</span> <span class="nc">Map</span><span class="p">&lt;</span><span class="nc">Group</span><span class="p">,</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">User</span><span class="p">&gt;&gt;</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>Will be nicely serialized as:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"group1"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"user1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"user2"</span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>]]></content><author><name></name></author><category term="kotlin" /><category term="type-safety" /><category term="json" /><category term="kotlin" /><category term="types" /><category term="wrappers" /><category term="json" /><summary type="html"><![CDATA[One thing which I found pretty useful in terms of type safety is to create special wrappers for primitive types.]]></summary></entry><entry><title type="html">Pipeline for blog</title><link href="https://eiva.dev/jekyll/azure/pipelines/2022/02/16/blog-deployment.html" rel="alternate" type="text/html" title="Pipeline for blog" /><published>2022-02-16T16:00:31+00:00</published><updated>2022-02-16T16:00:31+00:00</updated><id>https://eiva.dev/jekyll/azure/pipelines/2022/02/16/blog-deployment</id><content type="html" xml:base="https://eiva.dev/jekyll/azure/pipelines/2022/02/16/blog-deployment.html"><![CDATA[<p>Historically I’m mostly using <a href="https://visualstudio.com">visualstudio.com</a> as a repo for my personal stuff. There was few reasons for this:</p>
+
+<ul>
+  <li>Long time ago <a href="https://github.com">github.com</a> allowed to host sources for free, but only in public repos… I’m not so brave to make my personal shity-style code public available thus I wanted to have private repositories. <a href="https://visualstudio.com">visualstudio.com</a> allowed to store unlimited number of private repos.</li>
+  <li><a href="https://visualstudio.com">visualstudio.com</a> had pipelines long before it become available on <a href="https://github.com">github.com</a> and on many other code hosting service.</li>
+  <li>I was a big fan of Microsoft… yep… I know, I know. Shame on me.</li>
+</ul>
+
+<p>So now I’m going to use same thing for storing my source, but for website hosing I’ll use <a href="https://pages.github.com/">pages.github.com</a> as one of the most simple and still free static site hosting services.</p>
+
+<p>The general approach is trivial:</p>
+
+<ol>
+  <li>Setup empty repo on <a href="https://github.com">github.com</a> and configure it to be hosted by <a href="https://pages.github.com/">pages.github.com</a></li>
+  <li>Have a repo on <a href="https://visualstudio.com">visualstudio.com</a> with sources</li>
+  <li>Setup Azure pipeline to build website and push it to <a href="https://github.com">github.com</a> repo</li>
+</ol>
+
+<p>To make #3 possible it will be required to generate deployment key with write permissions. Public key will be on <a href="https://github.com">github.com</a> while private in <a href="https://visualstudio.com">visualstudio.com</a></p>
+
+<p>I ended up with following pipeline definition:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">trigger</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="s">master</span>
+
+<span class="na">pool</span><span class="pi">:</span>
+  <span class="na">vmImage</span><span class="pi">:</span> <span class="s1">'</span><span class="s">ubuntu-latest'</span>
+
+<span class="na">steps</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">task</span><span class="pi">:</span> <span class="s">UseRubyVersion@0</span>
+  <span class="na">inputs</span><span class="pi">:</span>
+    <span class="na">versionSpec</span><span class="pi">:</span> <span class="s1">'</span><span class="s">&gt;=</span><span class="nv"> </span><span class="s">3.0.0'</span>
+
+<span class="pi">-</span> <span class="na">task</span><span class="pi">:</span> <span class="s">DownloadSecureFile@1</span>
+  <span class="na">inputs</span><span class="pi">:</span>
+    <span class="na">secureFile</span><span class="pi">:</span> <span class="s">private</span>
+
+
+<span class="pi">-</span> <span class="na">script</span><span class="pi">:</span> <span class="pi">|</span>
+    <span class="s">bundle install</span>
+    <span class="s">jekyll build</span>
+    <span class="s">cd .site</span>
+    <span class="s">echo "eiva.dev" &gt; CNAME</span>
+    <span class="s">git init</span>
+    <span class="s">git config --local user.name "Azure Pipelines"</span>
+    <span class="s">git config --local user.email "azure@eiva.dev"</span>
+    <span class="s">git add .</span>
+    <span class="s">git commit -m "Publishing GitHub Pages"</span>
+    <span class="s">mkdir ~/.ssh &amp;&amp; mv $DOWNLOADSECUREFILE_SECUREFILEPATH ~/.ssh/id_rsa</span>
+    <span class="s">chmod 700 ~/.ssh &amp;&amp; chmod 600 ~/.ssh/id_rsa</span>
+    <span class="s">ssh-keyscan -t rsa github.com &gt;&gt; ~/.ssh/known_hosts</span>
+    <span class="s">git remote add origin git@github.com:eiva/eiva.github.io.git</span>
+    <span class="s">git push -f origin HEAD:master</span>
+</code></pre></div></div>
+
+<p>And now - whenever I updating my repo - all changes automatically got published as my blog.</p>
+
+<p>Not harder than get to any web ui and type it.</p>
+
+<p>The benefit of such thing - that it handle any “updates” or “edits” perfectly.</p>
+
+<p>Next followup - to find good theme, as this <code class="language-plaintext highlighter-rouge">minaml</code> is good but I prefer to have dark theme.</p>]]></content><author><name></name></author><category term="jekyll" /><category term="azure" /><category term="pipelines" /><category term="blog" /><summary type="html"><![CDATA[Historically I’m mostly using visualstudio.com as a repo for my personal stuff. There was few reasons for this: Long time ago github.com allowed to host sources for free, but only in public repos… I’m not so brave to make my personal shity-style code public available thus I wanted to have private repositories. visualstudio.com allowed to store unlimited number of private repos. visualstudio.com had pipelines long before it become available on github.com and on many other code hosting service. I was a big fan of Microsoft… yep… I know, I know. Shame on me. So now I’m going to use same thing for storing my source, but for website hosing I’ll use pages.github.com as one of the most simple and still free static site hosting services. The general approach is trivial: Setup empty repo on github.com and configure it to be hosted by pages.github.com Have a repo on visualstudio.com with sources Setup Azure pipeline to build website and push it to github.com repo To make #3 possible it will be required to generate deployment key with write permissions. Public key will be on github.com while private in visualstudio.com I ended up with following pipeline definition: trigger: - master pool: vmImage: 'ubuntu-latest' steps: - task: UseRubyVersion@0 inputs: versionSpec: '&gt;= 3.0.0' - task: DownloadSecureFile@1 inputs: secureFile: private - script: | bundle install jekyll build cd .site echo "eiva.dev" &gt; CNAME git init git config --local user.name "Azure Pipelines" git config --local user.email "azure@eiva.dev" git add . git commit -m "Publishing GitHub Pages" mkdir ~/.ssh &amp;&amp; mv $DOWNLOADSECUREFILE_SECUREFILEPATH ~/.ssh/id_rsa chmod 700 ~/.ssh &amp;&amp; chmod 600 ~/.ssh/id_rsa ssh-keyscan -t rsa github.com &gt;&gt; ~/.ssh/known_hosts git remote add origin git@github.com:eiva/eiva.github.io.git git push -f origin HEAD:master And now - whenever I updating my repo - all changes automatically got published as my blog. Not harder than get to any web ui and type it. The benefit of such thing - that it handle any “updates” or “edits” perfectly. Next followup - to find good theme, as this minaml is good but I prefer to have dark theme.]]></summary></entry><entry><title type="html">Welcome to my blog!</title><link href="https://eiva.dev/jekyll/update/2022/02/16/welcome.html" rel="alternate" type="text/html" title="Welcome to my blog!" /><published>2022-02-16T07:55:31+00:00</published><updated>2022-02-16T07:55:31+00:00</updated><id>https://eiva.dev/jekyll/update/2022/02/16/welcome</id><content type="html" xml:base="https://eiva.dev/jekyll/update/2022/02/16/welcome.html"><![CDATA[<p>After many years of going back and forward I decided to start my blog once again.</p>
+
+<p>There is nothing special - just dump of things I found interesting or worth of saving it somewhere.</p>
+
+<p>Previously, when I tried to use Blogspot the lack of nice editor really dissatisfied me: requirement to edit blogs in web browser, lack of normal code formatting tools - all was not what I wanted. There was set of editors but as far as I found - most of them had some issues like problem with pictures, lack of simple style system or problems with publishing or updates.</p>
+
+<p>Now I found <a href="https://jekyllrb.com/">Jekyll</a> - simple static website generator which can simply turn markdown into website which also support blogs.</p>
+
+<p>I don’t even need to have some fancy editor as just dumping small code-snippets and some thoughts around - is almost all what I ever need.</p>
+
+<p>On one side lack of comments or any feedback could be considered as a problem, but nowadays I don’t even expect any visitors - there too many really nice bloggers and influencers all around who spent big portion of their time to get visits. I don’t even expect any visits to be honest, but still want to have some cozzy place to dump ideas.</p>
+
+<p>As followup for me - to setup CI/CD for this, and to find good theme.</p>]]></content><author><name></name></author><category term="jekyll" /><category term="update" /><category term="jekyll" /><summary type="html"><![CDATA[After many years of going back and forward I decided to start my blog once again. There is nothing special - just dump of things I found interesting or worth of saving it somewhere. Previously, when I tried to use Blogspot the lack of nice editor really dissatisfied me: requirement to edit blogs in web browser, lack of normal code formatting tools - all was not what I wanted. There was set of editors but as far as I found - most of them had some issues like problem with pictures, lack of simple style system or problems with publishing or updates. Now I found Jekyll - simple static website generator which can simply turn markdown into website which also support blogs. I don’t even need to have some fancy editor as just dumping small code-snippets and some thoughts around - is almost all what I ever need. On one side lack of comments or any feedback could be considered as a problem, but nowadays I don’t even expect any visitors - there too many really nice bloggers and influencers all around who spent big portion of their time to get visits. I don’t even expect any visits to be honest, but still want to have some cozzy place to dump ideas. As followup for me - to setup CI/CD for this, and to find good theme.]]></summary></entry></feed>

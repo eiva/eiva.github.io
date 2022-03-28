@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Extra type safety | Personal blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="Extra type safety" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="One thing which I found pretty useful in terms of type safety is to create special wrappers for primitive types." />
+<meta property="og:description" content="One thing which I found pretty useful in terms of type safety is to create special wrappers for primitive types." />
+<link rel="canonical" href="https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety.html" />
+<meta property="og:url" content="https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety.html" />
+<meta property="og:site_name" content="Personal blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-03-27T20:44:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Extra type safety" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2022-03-27T20:44:00+00:00","datePublished":"2022-03-27T20:44:00+00:00","description":"One thing which I found pretty useful in terms of type safety is to create special wrappers for primitive types.","headline":"Extra type safety","mainEntityOfPage":{"@type":"WebPage","@id":"https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety.html"},"url":"https://eiva.dev/kotlin/type-safety/json/2022/03/27/type-safety.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="https://eiva.dev/feed.xml" title="Personal blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Personal blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Extra type safety</h1>
+    <p class="post-meta">
+      <time class="dt-published" datetime="2022-03-27T20:44:00+00:00" itemprop="datePublished">Mar 27, 2022
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>One thing which I found pretty useful in terms of type safety is to create special wrappers for primitive types.</p>
+
+<p>Idea is following: assume that in code we have 2 entities: User and Group. Both can be represented as simple strings:</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">data class</span> <span class="nc">SomeAggregation</span><span class="p">(</span>
+    <span class="kd">val</span> <span class="py">user</span><span class="p">:</span> <span class="nc">String</span><span class="p">,</span>
+    <span class="kd">val</span> <span class="py">group</span><span class="p">:</span> <span class="nc">String</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>Simple solution. But problem can happen when we accidentally misuse that values.</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">fun</span> <span class="nf">validateGroupInDenylist</span><span class="p">(</span><span class="n">group</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span> <span class="o">..</span><span class="p">.</span>
+
+<span class="o">..</span><span class="p">.</span>
+
+<span class="nf">validateGroupInDenylist</span><span class="p">(</span><span class="n">aggregation</span><span class="p">.</span><span class="n">user</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>In most such cases Unit Testing can help find such mistakes. But there still some chance that this bug will sneak into production code.</p>
+
+<p>Alternative could be to create simple dedicated type.</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">data class</span> <span class="nc">User</span><span class="p">(</span><span class="kd">val</span> <span class="py">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span>
+<span class="kd">data class</span> <span class="nc">Group</span><span class="p">(</span><span class="kd">val</span> <span class="py">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span>
+
+<span class="kd">data class</span> <span class="nc">SomeAggregation</span><span class="p">(</span>
+    <span class="kd">val</span> <span class="py">user</span><span class="p">:</span> <span class="nc">User</span><span class="p">,</span>
+    <span class="kd">val</span> <span class="py">group</span><span class="p">:</span> <span class="nc">Group</span>
+<span class="p">)</span>
+
+<span class="k">fun</span> <span class="nf">validateGroupInDenylist</span><span class="p">(</span><span class="n">group</span><span class="p">:</span> <span class="nc">Group</span><span class="p">)</span> <span class="o">..</span><span class="p">.</span>
+</code></pre></div></div>
+
+<p>Now if we try to misuse argument <code class="language-plaintext highlighter-rouge">validateGroupInDenylist(aggregation.user)</code> compiler instantly notify us about this.</p>
+
+<p>Simple technics, but it actually saved me from hours of debugging.</p>
+
+<h2 id="json-serialization">Json Serialization</h2>
+
+<p>One caveat here could be JSON serialization.</p>
+
+<p>By default json representation of <code class="language-plaintext highlighter-rouge">SomeAggregation</code> will look a bit strange:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"user"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"userValue"</span><span class="p">}</span><span class="w">
+    </span><span class="nl">"group"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"groupValue"</span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>While it is possible to create individual serializer for each type - it instantly become cumbersome.
+Different solution could be in defining only base type.</p>
+
+<h3 id="base-type-for-wrapper">Base type for wrapper</h3>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="k">import</span> <span class="nn">com.fasterxml.jackson.annotation.JsonIgnore</span>
+<span class="k">import</span> <span class="nn">java.io.Serializable</span>
+
+<span class="k">abstract</span> <span class="kd">class</span> <span class="nc">StringWrapper</span><span class="p">(</span><span class="kd">val</span> <span class="py">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span> <span class="p">:</span> <span class="nc">Serializable</span> <span class="p">{</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">toString</span><span class="p">()</span> <span class="p">=</span> <span class="n">value</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">equals</span><span class="p">(</span><span class="n">other</span><span class="p">:</span> <span class="nc">Any</span><span class="p">?):</span> <span class="nc">Boolean</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">other</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">false</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="p">(</span><span class="k">this</span><span class="o">::</span><span class="k">class</span> <span class="p">!=</span> <span class="n">other</span><span class="o">::</span><span class="k">class</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">false</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="k">this</span><span class="p">.</span><span class="n">value</span> <span class="p">==</span> <span class="p">(</span><span class="n">other</span> <span class="k">as</span> <span class="nc">StringWrapper</span><span class="p">).</span><span class="n">value</span>
+    <span class="p">}</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">hashCode</span><span class="p">():</span> <span class="nc">Int</span> <span class="p">=</span> <span class="n">value</span><span class="p">.</span><span class="nf">hashCode</span><span class="p">()</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Later we can use it as usual:</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">class</span> <span class="nc">User</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nc">String</span><span class="p">)</span> <span class="p">:</span> <span class="nc">StringWrapper</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="object-mapper">Object mapper</h2>
+
+<p>In this case we need to teach serializer to work with that wrapper only once:</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="cm">/**
+ * Allow jackson to properly select deserializer for StringWrapper subclass
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperModuleDeserializers</span> <span class="p">:</span> <span class="nc">SimpleDeserializers</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">findBeanDeserializer</span><span class="p">(</span>
+        <span class="n">type</span><span class="p">:</span> <span class="nc">JavaType</span><span class="p">,</span>
+        <span class="n">config</span><span class="p">:</span> <span class="nc">DeserializationConfig</span><span class="p">,</span>
+        <span class="n">beanDesc</span><span class="p">:</span> <span class="nc">BeanDescription</span>
+    <span class="p">):</span> <span class="nc">JsonDeserializer</span><span class="p">&lt;</span><span class="err">*</span><span class="p">&gt;?</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">type</span><span class="p">.</span><span class="nf">isTypeOrSubTypeOf</span><span class="p">(</span><span class="nc">StringWrapper</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">))</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nc">StringWrapperDeserializer</span><span class="p">(</span><span class="n">type</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="k">super</span><span class="p">.</span><span class="nf">findBeanDeserializer</span><span class="p">(</span><span class="n">type</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">beanDesc</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**
+ * Deserialize subclass of StringWrapper from a simple string value.
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperDeserializer</span><span class="p">(</span><span class="k">private</span> <span class="kd">val</span> <span class="py">type</span><span class="p">:</span> <span class="nc">JavaType</span><span class="p">)</span> <span class="p">:</span> <span class="nc">JsonDeserializer</span><span class="p">&lt;</span><span class="nc">StringWrapper</span><span class="p">&gt;()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">deserialize</span><span class="p">(</span><span class="n">parser</span><span class="p">:</span> <span class="nc">JsonParser</span><span class="p">,</span> <span class="n">p1</span><span class="p">:</span> <span class="nc">DeserializationContext</span><span class="p">?):</span> <span class="nc">StringWrapper</span><span class="p">?</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">type</span><span class="p">.</span><span class="n">rawClass</span><span class="p">.</span><span class="nf">getConstructor</span><span class="p">(</span><span class="nc">String</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">).</span><span class="nf">newInstance</span><span class="p">(</span><span class="n">parser</span><span class="p">.</span><span class="n">valueAsString</span><span class="p">.</span><span class="nf">intern</span><span class="p">())</span> <span class="k">as</span> <span class="nc">StringWrapper</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**
+ * Serializes StringWrapper as a simple string.
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperSerializer</span> <span class="p">:</span> <span class="nc">JsonSerializer</span><span class="p">&lt;</span><span class="nc">StringWrapper</span><span class="p">&gt;()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">serialize</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nc">StringWrapper</span><span class="p">?,</span> <span class="n">jgen</span><span class="p">:</span> <span class="nc">JsonGenerator</span><span class="p">,</span> <span class="n">p2</span><span class="p">:</span> <span class="nc">SerializerProvider</span><span class="p">?)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeString</span><span class="p">(</span><span class="s">""</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeString</span><span class="p">(</span><span class="n">value</span><span class="p">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cm">/**
+ * Serializes StringWrapper as a string map key.
+ */</span>
+<span class="kd">class</span> <span class="nc">StringWrapperKeySerializer</span> <span class="p">:</span> <span class="nc">JsonSerializer</span><span class="p">&lt;</span><span class="nc">StringWrapper</span><span class="p">&gt;()</span> <span class="p">{</span>
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">serialize</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nc">StringWrapper</span><span class="p">?,</span> <span class="n">jgen</span><span class="p">:</span> <span class="nc">JsonGenerator</span><span class="p">,</span> <span class="n">p2</span><span class="p">:</span> <span class="nc">SerializerProvider</span><span class="p">?)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">value</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeFieldName</span><span class="p">(</span><span class="s">""</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="n">jgen</span><span class="p">.</span><span class="nf">writeFieldName</span><span class="p">(</span><span class="n">value</span><span class="p">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">fun</span> <span class="nf">register</span><span class="p">():</span> <span class="nc">ObjectMapper</span> <span class="p">{</span>
+    <span class="kd">val</span> <span class="py">simpleModule</span> <span class="p">=</span> <span class="nc">SimpleModule</span><span class="p">()</span>
+    <span class="n">simpleModule</span><span class="p">.</span><span class="nf">setDeserializers</span><span class="p">(</span><span class="nc">StringWrapperModuleDeserializers</span><span class="p">())</span>
+    <span class="n">simpleModule</span><span class="p">.</span><span class="nf">addKeySerializer</span><span class="p">(</span><span class="nc">StringWrapper</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">,</span> <span class="nc">StringWrapperKeySerializer</span><span class="p">())</span>
+    <span class="n">simpleModule</span><span class="p">.</span><span class="nf">addSerializer</span><span class="p">(</span><span class="nc">StringWrapper</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">,</span> <span class="nc">StringWrapperSerializer</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="nf">jacksonObjectMapper</span><span class="p">()</span>
+        <span class="p">.</span><span class="nf">registerModule</span><span class="p">(</span><span class="n">simpleModule</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now it is possible to use wrapped types as any other primitive type</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">data class</span> <span class="nc">Data</span><span class="p">(</span>
+    <span class="kd">val</span> <span class="py">users</span><span class="p">:</span> <span class="nc">Map</span><span class="p">&lt;</span><span class="nc">Group</span><span class="p">,</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">User</span><span class="p">&gt;&gt;</span>
+<span class="p">)</span>
+</code></pre></div></div>
+
+<p>Will be nicely serialized as:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"group1"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"user1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"user2"</span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+  </div><a class="u-url" href="/kotlin/type-safety/json/2022/03/27/type-safety.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Personal blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Personal blog</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"><li><a href="https://github.com/eiva"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">eiva</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>This domain is not for sale.</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>
